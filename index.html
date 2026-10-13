@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+	<meta charset="UTF-8">
+	<title>스트리밍 실험</title>
+</head>
+<script>
+	let activeRequest = 0;
+
+	function updateButtons() {
+		const disabled = activeRequest > 0;
+
+		for (const id of ["stream-btn", "batch-btn", "both-btn"]){
+			document.getElementById(id).disabled = disabled;
+		}
+	}
+	async function runBatch() {
+		const output = document.getElementById("batch-output");
+		output.textContent = "기다리는 중...";
+
+	const timing = document.getElementById("batch-timing");
+	timing.textContent = "측정 중...";
+	const start = performance.now();
+
+	activeRequest++;
+	updateButtons();
+
+	try{
+    	const response = await fetch("/batch");
+
+		if (!response.ok) {
+			throw new Error('HTTP ${response.status}');
+		}
+
+    	const data = await response.json();
+
+    	output.textContent = data.result;
+
+		const total = (performance.now() - start) / 1000;
+		timing.textContent = `전체 결과 도착: ${total.toFixed(2)}초`;
+	}catch (error) {
+	output.textContent = '오류: ${error.message}';
+	timing.textContent = "측정 실패";
+	}finally {
+	activeRequest--;
+	updateButtons();
+	}
+	}
+	async function runStream() {
+		const output = document.getElementById("stream-output");
+		output.textContent = "";
+
+		const timing = document.getElementById("stream-timing");
+		timing.textContent = "측정 중...";
+		const start = performance.now();
+		let firstReceived = false;
+
+	activeRequest++;
+	updateButtons();
+
+	try{
+		const response = await fetch("/stream");
+
+		if (!response.ok) {
+			throw new ERROR('HTTP ${response.status}');
+		}
+		
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+
+		while (true) {
+
+			const { done, value } = await reader.read();
+			
+			if (done) {
+				output.textContent += decoder.decode();
+				const total = (performance.now() - start) / 1000;
+				timing.textContent += ` / 전체: ${total.toFixed(2)}초`;
+				break;
+			}
+			if (!firstReceived && value.length > 0) {
+				const first = (performance.now() - start) / 1000;
+				timing.textContent = `첫 데이터: ${first.toFixed(2)}초`;
+				firstReceived = true;
+			}
+			output.textContent += decoder.decode(value, { stream: true });
+
+		}
+	}catch (error) {
+		output.textContent = '오류:${error.message}';
+		timing.textContent = "측정 실패";
+	}finally {
+		activeRequest--;
+		updateButtons();
+	}
+	}
+
+</script>
+<body>
+	<h1>스트리밍 vs 일괄 응답</h1>
+
+	<button id = "stream-btn" onclick="runStream()">스트리밍 시작</button>
+	<button id = "batch-btn" onclick="runBatch()">일괄 응답 시작</button>
+	<button id = "both-btn" onclick="runStream(); runBatch();">동시에 시작</button> 
+
+	<h2>스트리밍</h2>
+	<pre id = "stream-output">결과가 여기에 표시됩니다.</pre>
+	<p id ="stream-timing">시간 측정 전</p>
+
+	<h2>일괄 응답</h2>
+	<pre id =  "batch-output">결과가 여기에 표시됩니다.</pre>
+	<p id = "batch-timing">시간 측정 전</p>
+
+</body>
+</html>
